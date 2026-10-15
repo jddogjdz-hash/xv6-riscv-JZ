@@ -152,6 +152,16 @@ skip_space(char *s)
   return s;
 }
 
+static int
+has_prefix(const char *s, const char *prefix)
+{
+  while (*prefix) {
+    if (*s++ != *prefix++)
+      return 0;
+  }
+  return 1;
+}
+
 // PA2 Extra Credit: run getpriority/setpriority in the parent shell process.
 static int
 priority_builtin(char *cmd)
@@ -159,7 +169,7 @@ priority_builtin(char *cmd)
   char *arg;
   int priority;
 
-  if (strncmp(cmd, "getpriority", 11) == 0 &&
+  if (has_prefix(cmd, "getpriority") &&
       (cmd[11] == ' ' || cmd[11] == '\t' || cmd[11] == '\n' ||
        cmd[11] == 0)) {
     arg = skip_space(cmd + 11);
@@ -173,7 +183,7 @@ priority_builtin(char *cmd)
     return 1;
   }
 
-  if (strncmp(cmd, "setpriority", 11) != 0 ||
+  if (!has_prefix(cmd, "setpriority") ||
       (cmd[11] != ' ' && cmd[11] != '\t'))
     return 0;
 
