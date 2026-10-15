@@ -14,8 +14,8 @@ struct pstat {
   char name[16];
   // PA2 Task 2: base scheduling priority.
   int priority;
-  // PA2 Task 3: tick when this process most recently entered the ready queue.
-  uint readytime;
+  // Ticks elapsed since this process was created.
+  uint age;
 };
 
 struct rusage {

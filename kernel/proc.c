@@ -153,6 +153,7 @@ found:
   // PA2 Tasks 2-3: initialize default priority and ready-queue timestamp.
   p->priority = 0;
   p->readytime = 0;
+  p->starttime = tickcount();
   p->state = USED;
 
   // Allocate a trapframe page.
@@ -199,6 +200,7 @@ freeproc(struct proc *p)
   p->xstate = 0;
   p->priority = 0;
   p->readytime = 0;
+  p->starttime = 0;
   p->state = UNUSED;
 }
 
@@ -510,7 +512,7 @@ kwait2(uint64 status_addr, uint64 rusage_addr)
     acquire(&wait_lock);
   }
 }
-// PA2 Tasks 1-3: return active-process data, including priority and readytime.
+// PA2 Tasks 1-3: return active-process data, including priority and age.
 // Hold wait_lock while scanning so each process's parent pointer stays
 // consistent, then lock each process to safely read its fields. Skip UNUSED
 // slots, copy the active process details into a temporary pstat, and use
@@ -535,8 +537,7 @@ kgetprocs(uint64 addr)
       safestrcpy(entry.name, p->name, sizeof(entry.name));
       // PA2 Task 2: include base priority in the user-visible process record.
       entry.priority = p->priority;
-      // PA2 Task 3: pass readytime to ps for runnable-process age.
-      entry.readytime = p->readytime;
+      entry.age = tickcount() - p->starttime;
 
       uint64 dst = addr + (uint64)count * sizeof(entry);
       if (dst < addr ||

@@ -94,6 +94,7 @@ struct proc {
   int priority;         // PA2 Task 2: user priority, from 0 to 49.
   // PA2 Task 3: p->lock protects the most recent runnable-entry timestamp.
   uint readytime;       // PA2 Task 3: tick when this process became runnable.
+  uint starttime;       // Tick when this process was allocated.
 
   // wait_lock must be held when using this:
   struct proc *parent; // Parent process
