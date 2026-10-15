@@ -2,6 +2,8 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 
+// PA1: user program that calls uptime() and prints total system runtime in ticks.
+
 int
 main(int argc, char *argv[])
 {

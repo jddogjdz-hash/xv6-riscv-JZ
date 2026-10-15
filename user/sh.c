@@ -1,6 +1,7 @@
 // Shell.
 
 #include "kernel/types.h"
+#include "kernel/param.h"
 #include "user/user.h"
 #include "kernel/fcntl.h"
 
@@ -142,6 +143,69 @@ getcmd(char *buf, int nbuf)
   return 0;
 }
 
+// PA2 Extra Credit: parse whitespace around the priority built-in arguments.
+static char *
+skip_space(char *s)
+{
+  while (*s == ' ' || *s == '\t')
+    s++;
+  return s;
+}
+
+// PA2 Extra Credit: run getpriority/setpriority in the parent shell process.
+static int
+priority_builtin(char *cmd)
+{
+  char *arg;
+  int priority;
+
+  if (strncmp(cmd, "getpriority", 11) == 0 &&
+      (cmd[11] == ' ' || cmd[11] == '\t' || cmd[11] == '\n' ||
+       cmd[11] == 0)) {
+    arg = skip_space(cmd + 11);
+    if (*arg == '\n')
+      arg++;
+    if (*arg != 0) {
+      fprintf(2, "usage: getpriority\n");
+    } else {
+      printf("%d\n", getpriority());
+    }
+    return 1;
+  }
+
+  if (strncmp(cmd, "setpriority", 11) != 0 ||
+      (cmd[11] != ' ' && cmd[11] != '\t'))
+    return 0;
+
+  arg = skip_space(cmd + 11);
+  priority = 0;
+  if (*arg < '0' || *arg > '9') {
+    fprintf(2, "usage: setpriority <0-49>\n");
+    return 1;
+  }
+  while (*arg >= '0' && *arg <= '9') {
+    int digit = *arg - '0';
+    if (priority > MAXPRIORITY / 10 ||
+        (priority == MAXPRIORITY / 10 &&
+         digit > MAXPRIORITY % 10)) {
+      fprintf(2, "setpriority: priority must be between 0 and 49\n");
+      return 1;
+    }
+    priority = priority * 10 + digit;
+    arg++;
+  }
+  arg = skip_space(arg);
+  if (*arg == '\n')
+    arg++;
+  if (*arg != 0) {
+    fprintf(2, "usage: setpriority <0-49>\n");
+    return 1;
+  }
+  if (setpriority(priority) < 0)
+    fprintf(2, "setpriority: could not update priority\n");
+  return 1;
+}
+
 int
 main(void)
 {
@@ -163,7 +227,10 @@ main(void)
       cmd++;
     if (*cmd == '\n') // is a blank command
       continue;
-    if (cmd[0] == 'c' && cmd[1] == 'd' && cmd[2] == ' ') {
+    // PA2 Extra Credit: keep priority changes in sh for child inheritance.
+    if (priority_builtin(cmd)) {
+      continue;
+    } else if (cmd[0] == 'c' && cmd[1] == 'd' && cmd[2] == ' ') {
       // Chdir must be called by the parent, not the child.
       cmd[strlen(cmd) - 1] = 0; // chop \n
       if (chdir(cmd + 3) < 0)

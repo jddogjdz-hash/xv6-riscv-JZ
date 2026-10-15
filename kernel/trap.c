@@ -81,6 +81,7 @@ usertrap(void)
   if (killed(p))
     kexit(-1);
 
+  // PA1: increment per-process CPU time on each timer tick.
   // give up the CPU if this is a timer interrupt.
   if (which_dev == 2) {
     p->cputime++;
@@ -172,7 +173,7 @@ clockintr()
 {
   if (cpuid() == 0) {
     acquire(&tickslock);
-    ticks++;
+    __atomic_add_fetch(&ticks, 1, __ATOMIC_RELAXED);
     wakeup(&ticks);
     release(&tickslock);
   }

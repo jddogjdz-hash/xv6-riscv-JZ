@@ -76,12 +76,13 @@ struct trapframe {
   /* 280 */ uint64 t6;
 };
 
-enum procstate { UNUSED, USED, SLEEPING, RUNNABLE, RUNNING, ZOMBIE };
+#include "pstat.h"
 
 // Per-process state
 struct proc {
   struct spinlock lock;
 
+  // PA1: add per-process CPU accounting so the kernel can report cputime.
   // p->lock must be held when using these:
   enum procstate state; // Process state
   void *chan;           // If non-zero, sleeping on chan
@@ -89,6 +90,10 @@ struct proc {
   int xstate;           // Exit status to be returned to parent's wait
   int pid;              // Process ID
   uint cputime;         // Number of timer ticks this process has used
+  // PA2 Task 2: base scheduling priority; higher values run first.
+  int priority;         // PA2 Task 2: user priority, from 0 to 49.
+  // PA2 Task 3: p->lock protects the most recent runnable-entry timestamp.
+  uint readytime;       // PA2 Task 3: tick when this process became runnable.
 
   // wait_lock must be held when using this:
   struct proc *parent; // Parent process

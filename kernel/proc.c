@@ -4,8 +4,17 @@
 #include "riscv.h"
 #include "spinlock.h"
 #include "proc.h"
-#include "pstat.h"
 #include "defs.h"
+
+#ifndef __ATOMIC_RELAXED
+#define __ATOMIC_RELAXED 0
+#endif
+#ifndef __ATOMIC_ACQUIRE
+#define __ATOMIC_ACQUIRE 2
+#endif
+#ifndef __ATOMIC_RELEASE
+#define __ATOMIC_RELEASE 3
+#endif
 
 struct cpu cpus[NCPU];
 
@@ -26,6 +35,21 @@ extern char trampoline[]; // trampoline.S
 // memory model when using p->parent.
 // must be acquired before any p->lock.
 struct spinlock wait_lock;
+
+static uint
+tickcount(void)
+{
+  return __atomic_load_n(&ticks, __ATOMIC_RELAXED);
+}
+
+// PA2 Task 3: record when a process enters the ready queue for ps wait-age
+// reporting.
+static void
+setrunnable(struct proc *p)
+{
+  p->readytime = tickcount();
+  p->state = RUNNABLE;
+}
 
 // Allocate a page for each process's kernel stack.
 // Map it high in memory, followed by an invalid
@@ -124,7 +148,11 @@ allocproc(void)
 
 found:
   p->pid = allocpid();
+  // PA1: initialize new processes with zero CPU time.
   p->cputime = 0;
+  // PA2 Tasks 2-3: initialize default priority and ready-queue timestamp.
+  p->priority = 0;
+  p->readytime = 0;
   p->state = USED;
 
   // Allocate a trapframe page.
@@ -169,6 +197,8 @@ freeproc(struct proc *p)
   p->chan = 0;
   p->killed = 0;
   p->xstate = 0;
+  p->priority = 0;
+  p->readytime = 0;
   p->state = UNUSED;
 }
 
@@ -227,7 +257,7 @@ userinit(void)
 
   p->cwd = namei("/");
 
-  p->state = RUNNABLE;
+  setrunnable(p);
 
   release(&p->lock);
 }
@@ -260,9 +290,14 @@ growproc(int n)
 int
 kfork(void)
 {
-  int i, pid;
+  int i, pid, priority;
   struct proc *np;
   struct proc *p = myproc();
+
+  // PA2 Task 2: read the parent priority so the child can inherit it.
+  acquire(&p->lock);
+  priority = p->priority;
+  release(&p->lock);
 
   // Allocate process.
   if ((np = allocproc()) == 0) {
@@ -276,6 +311,7 @@ kfork(void)
     return -1;
   }
   np->sz = p->sz;
+  np->priority = priority;
 
   // copy saved user registers.
   *(np->trapframe) = *(p->trapframe);
@@ -300,7 +336,7 @@ kfork(void)
   release(&wait_lock);
 
   acquire(&np->lock);
-  np->state = RUNNABLE;
+  setrunnable(np);
   release(&np->lock);
 
   return pid;
@@ -422,6 +458,7 @@ kwait(uint64 addr)
 
 // Wait for a child process to exit and return its pid, exit status, and usage.
 // Return -1 if this process has no children.
+// PA1: copy child cputime into rusage so parent can report CPU usage.
 int
 kwait2(uint64 status_addr, uint64 rusage_addr)
 {
@@ -473,6 +510,75 @@ kwait2(uint64 status_addr, uint64 rusage_addr)
     acquire(&wait_lock);
   }
 }
+// PA2 Tasks 1-3: return active-process data, including priority and readytime.
+// Hold wait_lock while scanning so each process's parent pointer stays
+// consistent, then lock each process to safely read its fields. Skip UNUSED
+// slots, copy the active process details into a temporary pstat, and use
+// copyout to place it at the next array slot in the calling process's memory.
+// Increment count after each successful copy and return it when the scan ends.
+int
+kgetprocs(uint64 addr)
+{
+  struct proc *p;
+  struct pstat entry;
+  struct proc *current = myproc();
+  int count = 0;
+
+  acquire(&wait_lock);
+  for (p = proc; p < &proc[NPROC]; p++) {
+    acquire(&p->lock);
+    if (p->state != UNUSED) {
+      entry.pid = p->pid;
+      entry.state = p->state;
+      entry.size = p->sz;
+      entry.ppid = p->parent ? p->parent->pid : 0;
+      safestrcpy(entry.name, p->name, sizeof(entry.name));
+      // PA2 Task 2: include base priority in the user-visible process record.
+      entry.priority = p->priority;
+      // PA2 Task 3: pass readytime to ps for runnable-process age.
+      entry.readytime = p->readytime;
+
+      uint64 dst = addr + (uint64)count * sizeof(entry);
+      if (dst < addr ||
+          copyout(current->pagetable, current->sz, dst, (char *)&entry,
+                  sizeof(entry)) < 0) {
+        release(&p->lock);
+        release(&wait_lock);
+        return -1;
+      }
+      count++;
+    }
+    release(&p->lock);
+  }
+  release(&wait_lock);
+  return count;
+}
+
+int
+kgetpriority(void)
+{
+  struct proc *p = myproc();
+  int priority;
+
+  acquire(&p->lock);
+  priority = p->priority;
+  release(&p->lock);
+  return priority;
+}
+
+// PA2 Task 2: change the caller's base priority; reject values outside 0..49.
+int
+ksetpriority(int priority)
+{
+  struct proc *p = myproc();
+
+  if (priority < 0 || priority > MAXPRIORITY)
+    return -1;
+  acquire(&p->lock);
+  p->priority = priority;
+  release(&p->lock);
+  return 0;
+}
 
 // Per-CPU process scheduler.
 // Each CPU calls scheduler() after setting itself up.
@@ -497,6 +603,8 @@ scheduler(void)
     intr_on();
     intr_off();
 
+// PA2 Task 4: keep round-robin selectable alongside the priority policy.
+#if SCHEDULER == SCHED_RR
     int found = 0;
     for (p = proc; p < &proc[NPROC]; p++) {
       acquire(&p->lock);
@@ -520,8 +628,52 @@ scheduler(void)
     }
     if (found == 0) {
       // nothing to run; stop running on this core until an interrupt.
-      asm volatile("wfi");
+      wait_for_interrupt();
     }
+#elif SCHEDULER == SCHED_PRIORITY
+    int highest_priority = -1;
+    struct proc *next = 0;
+    uint now = tickcount();
+
+    // PA2 Task 5 aging: add one effective-priority point per waiting tick,
+    // capped at 99. Base priority is unchanged; ties use table scan order.
+    for (p = proc; p < &proc[NPROC]; p++) {
+      acquire(&p->lock);
+      if (p->state == RUNNABLE) {
+        uint age = now - p->readytime;
+        int effective_priority;
+        if (age >= MAXEFFPRIORITY - p->priority) {
+          effective_priority = MAXEFFPRIORITY;
+        } else {
+          effective_priority = p->priority + (int)age;
+        }
+        if (effective_priority > highest_priority) {
+          highest_priority = effective_priority;
+          next = p;
+        }
+      }
+      release(&p->lock);
+    }
+
+    if (next != 0) {
+      acquire(&next->lock);
+      if (next->state == RUNNABLE) {
+        next->state = RUNNING;
+        c->proc = next;
+        swtch(&c->context, &next->context);
+
+        // Don't re-enable interrupts on release.
+        mycpu()->intena = 0;
+        c->proc = 0;
+      }
+      release(&next->lock);
+    } else {
+      // Nothing to run; stop running on this core until an interrupt.
+      wait_for_interrupt();
+    }
+#else
+#error "Unknown scheduler selected in kernel/param.h"
+#endif
   }
 }
 
@@ -558,7 +710,7 @@ yield(void)
 {
   struct proc *p = myproc();
   acquire(&p->lock);
-  p->state = RUNNABLE;
+  setrunnable(p);
   sched();
   release(&p->lock);
 }
@@ -644,7 +796,7 @@ wakeup(void *chan)
       // If this waiting process has gotten so far as to actually
       // go to sleep, also set it back to RUNNING.
       if (p->state == SLEEPING) {
-        p->state = RUNNABLE;
+        setrunnable(p);
       }
     }
     release(&p->lock);
@@ -665,7 +817,7 @@ kkill(int pid)
       p->killed = 1;
       if (p->state == SLEEPING) {
         // Wake process from sleep().
-        p->state = RUNNABLE;
+        setrunnable(p);
       }
       release(&p->lock);
       return 0;

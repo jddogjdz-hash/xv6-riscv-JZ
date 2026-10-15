@@ -2,6 +2,8 @@
 #include "kernel/stat.h"
 #include "user/user.h"
 
+// PA1: run a child command and report elapsed wall-clock time in ticks.
+
 int
 main(int argc, char *argv[])
 {

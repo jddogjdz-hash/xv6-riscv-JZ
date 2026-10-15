@@ -119,6 +119,23 @@ $U/_forktest: $U/forktest.o $(ULIB)
 	$(LD) $(LDFLAGS) -N -e main -Ttext 0 -o $U/_forktest $U/forktest.o $U/ulib.o $U/usys.o
 	$(OBJDUMP) -S $U/_forktest > $U/forktest.asm
 
+# PA2 Tasks 2, 4-5: compile support tests from PA2/; ps remains in user/.
+PA2/%.o: PA2/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$U/ps.o: $U/ps.c
+	$(CC) $(CFLAGS) -c -o $@ $<
+
+$U/_ps: $U/ps.o $(ULIB) $U/user.ld
+	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $< $(ULIB)
+	$(OBJDUMP) -S $@ > $U/ps.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $U/ps.sym
+
+$U/_%: PA2/%.o $(ULIB) $U/user.ld
+	$(LD) $(LDFLAGS) -T $U/user.ld -o $@ $< $(ULIB)
+	$(OBJDUMP) -S $@ > PA2/$*.asm
+	$(OBJDUMP) -t $@ | sed '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > PA2/$*.sym
+
 mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 	gcc -Wno-unknown-attributes -I. -o mkfs/mkfs mkfs/mkfs.c
 
@@ -128,7 +145,13 @@ mkfs/mkfs: mkfs/mkfs.c $K/fs.h $K/param.h
 # http://www.gnu.org/software/make/manual/html_node/Chained-Rules.html
 .PRECIOUS: %.o
 
+# PA2 Tasks 1-2, 4-5: include ps and related tests in the filesystem image.
 UPROGS=\
+	$U/_ps\
+	$U/_pexec\
+	$U/_prioritytest\
+	$U/_schedtest\
+	$U/_agingtest\
 	$U/_uptime\
 	$U/_time1\
 	$U/_time\
@@ -158,7 +181,7 @@ UPROGS=\
 fs.img: mkfs/mkfs README $(UPROGS)
 	mkfs/mkfs fs.img README $(UPROGS)
 
--include kernel/*.d user/*.d
+-include kernel/*.d user/*.d PA2/*.d
 
 clean: 
 	rm -f *.tex *.dvi *.idx *.aux *.log *.ind *.ilg \

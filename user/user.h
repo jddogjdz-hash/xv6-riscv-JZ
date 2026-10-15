@@ -2,12 +2,18 @@
 
 struct stat;
 struct rusage;
+struct pstat;
 
 // system calls
 int fork(void);
 int exit(int) __attribute__((noreturn));
 int wait(int *);
 int wait2(int *, struct rusage *);
+// PA2 Task 1: request process details into a pstat array; returns count.
+int getprocs(struct pstat *);
+// PA2 Task 2: read or change caller's base priority (valid range: 0..49).
+int getpriority(void);
+int setpriority(int);
 int pipe(int *);
 int write(int, const void *, int);
 int read(int, void *, int);
@@ -15,6 +21,7 @@ int close(int);
 int kill(int);
 int exec(const char *, char **);
 int open(const char *, int);
+// PA1: declare uptime() and wait2() in the user API.
 int mknod(const char *, short, short);
 int unlink(const char *);
 int fstat(int fd, struct stat *);

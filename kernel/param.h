@@ -12,3 +12,11 @@
 #define FSSIZE      2000              // size of file system in blocks
 #define MAXPATH     128               // maximum file path name
 #define USERSTACK   1                 // user stack pages
+#define MAXPRIORITY 49 // PA2 Task 2: highest user-set base priority.
+
+// PA2 Task 4: select the scheduling policy at compile time; retain RR.
+#define SCHED_RR       0
+#define SCHED_PRIORITY 1
+#define SCHEDULER      SCHED_PRIORITY
+// PA2 Task 5: cap effective priority after waiting-time aging.
+#define MAXEFFPRIORITY 99

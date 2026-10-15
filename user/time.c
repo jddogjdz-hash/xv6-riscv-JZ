@@ -2,6 +2,8 @@
 #include "kernel/pstat.h"
 #include "user/user.h"
 
+// PA1: run a child command, then print elapsed time, CPU time, and CPU %.
+
 int
 main(int argc, char *argv[])
 {

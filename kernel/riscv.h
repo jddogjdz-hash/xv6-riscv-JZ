@@ -327,6 +327,12 @@ intr_get()
   return (x & SSTATUS_SIE) != 0;
 }
 
+static inline void
+wait_for_interrupt()
+{
+  asm volatile("wfi");
+}
+
 static inline uint64
 r_sp()
 {

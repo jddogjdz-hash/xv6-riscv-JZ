@@ -21,4 +21,10 @@
 #define SYS_mkdir  20
 #define SYS_close  21
 #define SYS_sync   22
+// PA1: added syscall IDs for uptime() and wait2().
 #define SYS_wait2  23
+// PA2 Task 1: expose the process-table snapshot syscall.
+#define SYS_getprocs 24
+// PA2 Task 2: priority query/update syscalls.
+#define SYS_getpriority 25
+#define SYS_setpriority 26

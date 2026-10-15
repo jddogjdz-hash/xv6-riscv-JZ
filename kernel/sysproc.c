@@ -39,11 +39,37 @@ sys_wait(void)
 uint64
 sys_wait2(void)
 {
+  // PA1: syscall to wait for a child and return exit status + rusage.
   uint64 status, rusage;
 
   argaddr(0, &status);
   argaddr(1, &rusage);
   return kwait2(status, rusage);
+}
+
+uint64
+sys_getprocs(void)
+{
+  uint64 addr;
+  argaddr(0, &addr);
+  // PA2 Task 1: delegate collection and safe copyout to the process table.
+  return kgetprocs(addr);
+}
+
+uint64
+sys_getpriority(void)
+{
+  // PA2 Task 2: return the calling process's current base priority.
+  return kgetpriority();
+}
+
+uint64
+sys_setpriority(void)
+{
+  int priority;
+  argint(0, &priority);
+  // PA2 Task 2: kernel validates the range and updates the caller.
+  return ksetpriority(priority);
 }
 
 uint64
@@ -110,6 +136,7 @@ sys_kill(void)
 
 // return how many clock tick interrupts have occurred
 // since start.
+// PA1: uptime() syscall returns total runtime in ticks.
 uint64
 sys_uptime(void)
 {

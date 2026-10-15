@@ -24,7 +24,12 @@ sub entry {
 entry("fork");
 entry("exit");
 entry("wait");
+# PA1: generated syscall stubs for wait2() and uptime().
 entry("wait2");
+entry("getprocs");
+# PA2 Task 2: generate user-space stubs for priority system calls.
+entry("getpriority");
+entry("setpriority");
 entry("pipe");
 entry("read");
 entry("write");
