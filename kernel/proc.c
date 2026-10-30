@@ -42,7 +42,7 @@ tickcount(void)
   return __atomic_load_n(&ticks, __ATOMIC_RELAXED);
 }
 
-// PA2 Task 3: record when a process enters the ready queue for ps wait-age
+// PA3 Task 3: record when a process enters the ready queue for ps wait-age
 // reporting.
 static void
 setrunnable(struct proc *p)
@@ -150,8 +150,9 @@ found:
   p->pid = allocpid();
   // PA1: initialize new processes with zero CPU time.
   p->cputime = 0;
-  // PA2 Tasks 2-3: initialize default priority and ready-queue timestamp.
+  // PA2 Task 2: initialize default priority.
   p->priority = 0;
+  // PA3 Task 3: initialize the ready-queue timestamp.
   p->readytime = 0;
   p->starttime = tickcount();
   p->state = USED;
@@ -296,7 +297,7 @@ kfork(void)
   struct proc *np;
   struct proc *p = myproc();
 
-  // PA2 Task 2: read the parent priority so the child can inherit it.
+  // PA2 Task 2: read the parent priority so the child can inherit
   acquire(&p->lock);
   priority = p->priority;
   release(&p->lock);
@@ -512,7 +513,7 @@ kwait2(uint64 status_addr, uint64 rusage_addr)
     acquire(&wait_lock);
   }
 }
-// PA2 Tasks 1-3: return active-process data, including priority and age.
+// PA2 Tasks 1-2 and PA3 Task 3: return active-process data and readytime.
 // Hold wait_lock while scanning so each process's parent pointer stays
 // consistent, then lock each process to safely read its fields. Skip UNUSED
 // slots, copy the active process details into a temporary pstat, and use
@@ -529,7 +530,7 @@ kgetprocs(uint64 addr)
   acquire(&wait_lock);
   for (p = proc; p < &proc[NPROC]; p++) {
     acquire(&p->lock);
-    if (p->state != UNUSED) {
+    if (p->state != UNUSED) { // T1 copies process metadata and name with safestrcpy
       entry.pid = p->pid;
       entry.state = p->state;
       entry.size = p->sz;
@@ -537,7 +538,8 @@ kgetprocs(uint64 addr)
       safestrcpy(entry.name, p->name, sizeof(entry.name));
       // PA2 Task 2: include base priority in the user-visible process record.
       entry.priority = p->priority;
-      entry.age = tickcount() - p->starttime;
+      // PA3 Task 3: let ps calculate ready-queue age for runnable processes.
+      entry.readytime = p->readytime;
 
       uint64 dst = addr + (uint64)count * sizeof(entry);
       if (dst < addr ||

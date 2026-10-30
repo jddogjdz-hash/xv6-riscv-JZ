@@ -92,8 +92,8 @@ struct proc {
   uint cputime;         // Number of timer ticks this process has used
   // PA2 Task 2: base scheduling priority; higher values run first.
   int priority;         // PA2 Task 2: user priority, from 0 to 49.
-  // PA2 Task 3: p->lock protects the most recent runnable-entry timestamp.
-  uint readytime;       // PA2 Task 3: tick when this process became runnable.
+  // PA3 Task 3: p->lock protects the most recent runnable-entry timestamp.
+  uint readytime;       // PA3 Task 3: tick when this process became runnable.
   uint starttime;       // Tick when this process was allocated.
 
   // wait_lock must be held when using this:
